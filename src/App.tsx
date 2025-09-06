@@ -620,11 +620,33 @@ const useUploader = (onUploadComplete: () => void) => {
 
   const uploadFiles = (files: File[], folderId: string | null) => {
     const newUploads: UploadItem[] = [];
+    const maxFileSize = 1 * 1024 * 1024 * 1024; // 1GB
+    const allowedTypes = [
+      "image/",
+      "video/",
+      "audio/",
+      "text/",
+      "application/pdf",
+      "application/zip",
+      "application/x-zip-compressed",
+      "application/json",
+      "application/javascript",
+    ];
+
     for (const file of files) {
-      if (file.size > 1 * 1024 * 1024 * 1024) {
+      if (file.size > maxFileSize) {
         toast.error(`"${file.name}" is too large (max 1GB).`);
         continue;
       }
+
+      if (
+        !allowedTypes.some((type) => file.type.startsWith(type)) &&
+        file.type !== ""
+      ) {
+        toast.warning(`"${file.name}" has an unsupported file type.`);
+        continue;
+      }
+
       newUploads.push({
         id: Math.random(),
         file,
@@ -633,8 +655,12 @@ const useUploader = (onUploadComplete: () => void) => {
         folderId: folderId,
       });
     }
-    setUploads((prev) => [...prev, ...newUploads]);
-    setIsMinimized(false);
+
+    if (newUploads.length > 0) {
+      setUploads((prev) => [...prev, ...newUploads]);
+      setIsMinimized(false);
+      toast.success(`${newUploads.length} file(s) queued for upload.`);
+    }
   };
 
   const cancelUpload = (uploadId: number) => {
@@ -746,38 +772,38 @@ const EmptyState: FC<{
   description: string;
   children?: ReactNode;
 }> = ({ icon, title, description, children }) => (
-  <div className="text-center py-16 px-6">
-    <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-slate-100 mb-4">
-      <Icon name={icon} className="h-8 w-8 text-slate-500" />
+  <div className="text-center py-16 px-6 animate-fade-in">
+    <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 mb-4 animate-bounce-in shadow-lg">
+      <Icon name={icon} className="h-8 w-8 text-indigo-600" />
     </div>
     <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
     <p className="text-slate-500 mt-1">{description}</p>
-    <div className="mt-6">{children}</div>
+    <div className="mt-6 animate-slide-up">{children}</div>
   </div>
 );
 
 const FileListSkeleton: FC = () => (
-  <div className="space-y-2">
+  <div className="space-y-2 animate-fade-in">
     {[...Array(5)].map((_, i) => (
-      <div key={i} className="flex items-center p-4 space-x-4">
-        <Skeleton className="h-5 w-5 rounded" />
-        <Skeleton className="h-4 w-4/12 rounded" />
-        <Skeleton className="h-4 w-2/12 ml-auto rounded" />
-        <Skeleton className="h-4 w-3/12 rounded" />
+      <div key={i} className="flex items-center p-4 space-x-4 hover-lift">
+        <Skeleton className="h-5 w-5 rounded skeleton-shimmer" />
+        <Skeleton className="h-4 w-4/12 rounded skeleton-shimmer" />
+        <Skeleton className="h-4 w-2/12 ml-auto rounded skeleton-shimmer" />
+        <Skeleton className="h-4 w-3/12 rounded skeleton-shimmer" />
       </div>
     ))}
   </div>
 );
 const FileGridSkeleton: FC = () => (
-  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-fade-in">
     {[...Array(5)].map((_, i) => (
-      <Card key={i}>
+      <Card key={i} className="hover-lift">
         <CardHeader>
-          <Skeleton className="h-10 w-10" />
+          <Skeleton className="h-10 w-10 skeleton-shimmer" />
         </CardHeader>
         <CardContent className="space-y-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="h-4 w-full skeleton-shimmer" />
+          <Skeleton className="h-3 w-3/4 skeleton-shimmer" />
         </CardContent>
       </Card>
     ))}
@@ -839,32 +865,54 @@ const AuthPage: FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-100 p-4">
-      <Card className="w-full max-w-md p-8 shadow-xl">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4">
+      <Card className="w-full max-w-md p-8 shadow-2xl glass-effect animate-scale-in">
         <div className="flex justify-center mb-6">
-          <Icon name="cloud" className="h-12 w-12 text-indigo-600" />
+          <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 animate-pulse-slow shadow-lg">
+            <Icon name="cloud" className="h-12 w-12 text-white" />
+          </div>
         </div>
         <h1 className="text-2xl font-bold text-center mb-1 text-slate-800">
           NetraDrive
         </h1>
-        <p className="text-center text-muted-foreground mb-8">
+        <p className="text-center text-slate-600 mb-8">
           {isLogin ? "Welcome back! Please log in." : "Create your account."}
         </p>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-4">
-            <Input ref={usernameRef} placeholder="Username" required />
+            <Input
+              ref={usernameRef}
+              placeholder="Username"
+              required
+              className="smooth-transition"
+            />
             {!isLogin && (
-              <Input ref={emailRef} type="email" placeholder="Email" required />
+              <Input
+                ref={emailRef}
+                type="email"
+                placeholder="Email"
+                required
+                className="smooth-transition"
+              />
             )}
             <Input
               ref={passwordRef}
               type="password"
               placeholder="Password"
               required
+              className="smooth-transition"
             />
           </div>
-          {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
-          <Button type="submit" className="w-full mt-6" disabled={loading}>
+          {error && (
+            <p className="text-red-500 text-sm mt-4 animate-slide-down">
+              {error}
+            </p>
+          )}
+          <Button
+            type="submit"
+            className="w-full mt-6 hover-lift bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
+            disabled={loading}
+          >
             {loading ? (
               <Icon name="spinner" className="h-4 w-4" />
             ) : isLogin ? (
@@ -874,11 +922,11 @@ const AuthPage: FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess }) => {
             )}
           </Button>
         </form>
-        <p className="mt-6 text-center text-sm">
+        <p className="mt-6 text-center text-sm text-slate-600">
           {isLogin ? "Don't have an account? " : "Already have an account? "}
           <Button
             variant="link"
-            className="p-1 h-auto"
+            className="p-1 h-auto smooth-transition text-indigo-600 hover:text-indigo-700"
             onClick={() => {
               setIsLogin((p) => !p);
               setError("");
@@ -910,13 +958,15 @@ const Sidebar: FC<{
     : 0;
 
   return (
-    <div className="h-full w-full bg-slate-50 border-r flex flex-col p-4">
-      <div className="flex items-center gap-2.5 mb-8 px-2">
-        <Icon name="cloud" className="h-8 w-8 text-indigo-600" />
+    <div className="h-full w-full bg-gradient-to-b from-slate-50 to-slate-100 border-r flex flex-col p-4 smooth-transition">
+      <div className="flex items-center gap-2.5 mb-8 px-2 animate-fade-in">
+        <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg">
+          <Icon name="cloud" className="h-6 w-6 text-white" />
+        </div>
         <h1 className="text-2xl font-bold text-slate-800">NetraDrive</h1>
       </div>
       <nav className="flex-grow space-y-1">
-        {navItems.map((item) => (
+        {navItems.map((item, index) => (
           <a
             key={item.id}
             href={`#/${item.id}`}
@@ -924,24 +974,27 @@ const Sidebar: FC<{
               e.preventDefault();
               onNavigate(item.id as ViewType);
             }}
-            className={`flex items-center gap-3 px-3 py-2 rounded-md text-slate-700 hover:bg-slate-200 transition-colors ${
-              currentView === item.id ? "bg-slate-200 font-semibold" : ""
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-slate-700 hover:bg-slate-200 smooth-transition hover-lift animate-slide-up ${
+              currentView === item.id
+                ? "bg-gradient-to-r from-indigo-100 to-purple-100 font-semibold shadow-sm"
+                : ""
             }`}
+            style={{ animationDelay: `${index * 0.1}s` }}
           >
             <Icon name={item.icon} className="h-5 w-5" />
             <span className="flex-1">{item.name}</span>
           </a>
         ))}
       </nav>
-      <div className="px-2">
-        <p className="text-sm font-medium mb-1">Storage</p>
-        <div className="w-full bg-slate-200 rounded-full h-1.5 mb-1">
+      <div className="px-2 animate-fade-in">
+        <p className="text-sm font-medium mb-1 text-slate-700">Storage</p>
+        <div className="w-full bg-slate-200 rounded-full h-2 mb-1 overflow-hidden">
           <div
-            className="bg-indigo-600 h-1.5 rounded-full"
+            className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2 rounded-full smooth-transition shadow-sm"
             style={{ width: `${usagePercent}%` }}
           ></div>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-slate-500">
           {formatBytes(storageUsage?.total_usage_bytes || 0)} used
         </p>
       </div>
@@ -952,7 +1005,7 @@ const Sidebar: FC<{
             e.preventDefault();
             onLogout();
           }}
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-red-700 hover:bg-red-200"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 smooth-transition hover-lift"
         >
           <Icon name="logout" className="h-5 w-5" />
           Logout
@@ -1163,10 +1216,10 @@ const FileGridView: FC<{
         <ContextMenu key={item._id}>
           <ContextMenuTrigger>
             <Card
-              className={`group transition-colors relative ${
+              className={`group transition-all duration-300 relative hover-lift ${
                 selectedItems.has(item._id)
-                  ? "bg-indigo-50 border-indigo-200"
-                  : "hover:bg-slate-50"
+                  ? "bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200 shadow-lg"
+                  : "hover:bg-gradient-to-br hover:from-slate-50 hover:to-blue-50 hover:shadow-md"
               }`}
               onDoubleClick={() => onItemClick(item)}
             >
@@ -1182,21 +1235,23 @@ const FileGridView: FC<{
                 />
               </div>
               <CardContent className="pt-6 flex flex-col items-center justify-center text-center cursor-pointer">
-                <Icon
-                  name={
-                    item.type === "folder"
-                      ? "folder"
-                      : getFileIconName(item as FileItem)
-                  }
-                  className="h-16 w-16 text-slate-600 mb-4"
-                />
+                <div className="p-3 rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 mb-4 group-hover:from-indigo-100 group-hover:to-purple-100 smooth-transition shadow-sm">
+                  <Icon
+                    name={
+                      item.type === "folder"
+                        ? "folder"
+                        : getFileIconName(item as FileItem)
+                    }
+                    className="h-12 w-12 text-slate-600 group-hover:text-indigo-600 smooth-transition"
+                  />
+                </div>
                 <p
-                  className="font-medium text-sm truncate w-full"
+                  className="font-medium text-sm truncate w-full text-slate-800"
                   title={item.name}
                 >
                   {item.name}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   {item.type === "file"
                     ? formatBytes((item as FileItem).size)
                     : "—"}
@@ -1392,9 +1447,8 @@ const ProgressPage: FC<{ children: ReactNode }> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const { access } = api.getTokens();
   const [user, setUser] = useState<JwtPayload | null>(null);
-  // --- BUG FIX: Use a ref to track initial load to stabilize the fetchTasks callback.
-  // This prevents the polling useEffect from restarting unnecessarily.
   const isInitialLoad = useRef(true);
+  const pollingRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (access) {
@@ -1422,29 +1476,30 @@ const ProgressPage: FC<{ children: ReactNode }> = ({ children }) => {
         isInitialLoad.current = false;
       }
     }
-  }, [user?.sub]); // Dependency array is now stable.
+  }, [user?.sub]);
 
   useEffect(() => {
+    if (!user?.sub) return;
+
     isInitialLoad.current = true;
     setLoading(true);
-    let isCancelled = false;
-    let timeoutId: number;
 
     const pollTasks = async () => {
-      if (isCancelled) return;
       await fetchTasks();
-      if (!isCancelled) {
-        timeoutId = window.setTimeout(pollTasks, 2000);
+      if (pollingRef.current !== null) {
+        pollingRef.current = window.setTimeout(pollTasks, 2000);
       }
     };
 
     pollTasks();
 
     return () => {
-      isCancelled = true;
-      clearTimeout(timeoutId);
+      if (pollingRef.current !== null) {
+        clearTimeout(pollingRef.current);
+        pollingRef.current = null;
+      }
     };
-  }, [fetchTasks]);
+  }, [user?.sub, fetchTasks]);
 
   const handleCancel = async (taskId: string) => {
     try {
@@ -1617,11 +1672,7 @@ const DrivePage: FC<{
     };
 
     if (view === "drive") {
-      if (
-        folderId &&
-        folderId !== "root" &&
-        breadcrumbs[breadcrumbs.length - 1]?.id !== folderId
-      ) {
+      if (folderId && folderId !== "root") {
         fetchPath(folderId);
       } else if (!folderId || folderId === "root") {
         setBreadcrumbs([{ id: "root", name: "My Drive" }]);
@@ -1635,8 +1686,7 @@ const DrivePage: FC<{
         { id: "search", name: `Search for "${path.searchQuery}"` },
       ]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, folderId, path.searchQuery, onNavigate]);
+  }, [view, folderId, path.searchQuery]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -1718,19 +1768,28 @@ const DrivePage: FC<{
         break;
       case "preview": {
         if (targetItems[0].type !== "file") return;
-        const blob = await api.getPreviewBlob(targetItems[0]._id);
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const previewWindow = window.open(url, "_blank");
-          if (previewWindow) {
-            previewWindow.addEventListener("beforeunload", () =>
-              URL.revokeObjectURL(url)
-            );
+        try {
+          const blob = await api.getPreviewBlob(targetItems[0]._id);
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const previewWindow = window.open(url, "_blank");
+            if (previewWindow) {
+              previewWindow.addEventListener("beforeunload", () => {
+                URL.revokeObjectURL(url);
+              });
+              previewWindow.addEventListener("unload", () => {
+                URL.revokeObjectURL(url);
+              });
+            } else {
+              // Fallback cleanup if popup was blocked
+              setTimeout(() => URL.revokeObjectURL(url), 10000);
+            }
           } else {
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            toast.error("Could not load preview.");
           }
-        } else {
-          toast.error("Could not load preview.");
+        } catch (error) {
+          console.error("Preview error:", error);
+          toast.error("Failed to load preview.");
         }
         break;
       }
@@ -1905,16 +1964,26 @@ const DrivePage: FC<{
         {children}
       </Header>
       <main
-        className="flex-grow p-4 md:p-6 overflow-auto relative"
+        className="flex-grow p-4 md:p-6 overflow-auto relative bg-white/50 backdrop-blur-sm"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         {isDragging && (
-          <div className="absolute inset-0 bg-indigo-500 bg-opacity-20 border-4 border-dashed border-indigo-500 rounded-xl flex items-center justify-center z-30 pointer-events-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-600/20 border-4 border-dashed border-indigo-500 rounded-xl flex items-center justify-center z-30 pointer-events-none animate-bounce-in">
             <div className="text-center text-indigo-700 font-semibold">
-              <Icon name="upload" className="h-16 w-16 mx-auto" />
-              <p className="text-xl mt-4">Drop files to upload</p>
+              <div className="p-4 rounded-full bg-white/80 backdrop-blur-sm shadow-xl">
+                <Icon
+                  name="upload"
+                  className="h-16 w-16 mx-auto animate-pulse"
+                />
+              </div>
+              <p className="text-xl mt-4 text-slate-800">
+                Drop files to upload
+              </p>
+              <p className="text-sm mt-2 opacity-80 text-slate-600">
+                Release to start uploading
+              </p>
             </div>
           </div>
         )}
@@ -2385,7 +2454,7 @@ export default function App() {
   );
 
   return (
-    <div className="h-screen w-screen flex bg-slate-100 font-sans text-slate-900 overflow-hidden">
+    <div className="h-screen w-screen flex bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 font-sans text-slate-900 overflow-hidden smooth-transition">
       <Toaster richColors position="top-center" />
       <div className="hidden md:block w-64 flex-shrink-0">
         <Sidebar
@@ -2411,10 +2480,10 @@ export default function App() {
       )}
 
       {uploads.length > 0 && (
-        <div className="fixed bottom-4 right-4 w-80 z-50">
-          <Card className="shadow-2xl">
-            <div className="p-3 border-b bg-slate-50 flex justify-between items-center">
-              <p className="text-sm font-semibold">
+        <div className="fixed bottom-4 right-4 w-80 z-50 animate-slide-up">
+          <Card className="shadow-2xl glass-effect">
+            <div className="p-3 border-b bg-gradient-to-r from-slate-50 to-blue-50 flex justify-between items-center">
+              <p className="text-sm font-semibold text-slate-800">
                 {uploads.every(
                   (u) =>
                     u.status === "complete" ||
@@ -2428,18 +2497,18 @@ export default function App() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-7 w-7 hover-lift"
                   onClick={() => setIsMinimized(!isMinimized)}
                 >
                   <Icon
                     name={isMinimized ? "chevronUp" : "chevronDown"}
-                    className="h-4 w-4"
+                    className="h-4 w-4 smooth-transition"
                   />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-7 w-7 hover-lift"
                   onClick={() => setUploads([])}
                 >
                   <Icon name="x" className="h-4 w-4" />
@@ -2467,12 +2536,14 @@ export default function App() {
                         <p className="text-muted-foreground">{upload.status}</p>
                       )}
                     </div>
-                    <div className="w-full bg-slate-200 rounded-full h-1.5">
+                    <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                        className={`h-2 rounded-full transition-all duration-500 ease-out ${
                           upload.status === "error"
-                            ? "bg-red-500"
-                            : "bg-indigo-600"
+                            ? "bg-gradient-to-r from-red-500 to-red-600"
+                            : upload.status === "complete"
+                            ? "bg-gradient-to-r from-green-500 to-green-600"
+                            : "bg-gradient-to-r from-indigo-500 to-purple-600"
                         }`}
                         style={{ width: `${upload.progress}%` }}
                       ></div>
