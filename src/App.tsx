@@ -535,13 +535,18 @@ const api = {
         reject(new Error("Upload cancelled."))
       );
 
-      xhr.open("POST", `${API_BASE_URL}/files/upload`);
+      // Build URL with folder_id as query parameter
+      let url = `${API_BASE_URL}/files/upload`;
+      if (folderId) {
+        url += `?folder_id=${folderId}`;
+      }
+
+      xhr.open("POST", url);
       const { access } = api.getTokens();
       if (access) xhr.setRequestHeader("Authorization", `Bearer ${access}`);
 
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("folder_id", folderId || "");
 
       xhr.send(formData);
     });
@@ -809,6 +814,88 @@ const FileGridSkeleton: FC = () => (
     ))}
   </div>
 );
+
+const FolderTreeView: FC<{
+  nodes: FolderTreeNode[];
+  selectedTarget: string | null;
+  onSelectTarget: (id: string | null) => void;
+  disabledIds?: Set<string>;
+}> = ({ nodes, selectedTarget, onSelectTarget, disabledIds = new Set() }) => {
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
+    new Set()
+  );
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  };
+
+  const renderNodes = (nodes: FolderTreeNode[], level = 0) => {
+    return nodes.map((node) => {
+      const isExpanded = expandedFolders.has(node._id);
+      const isDisabled = disabledIds.has(node._id);
+      const hasChildren = node.children && node.children.length > 0;
+
+      return (
+        <div key={node._id} className="relative">
+          {level > 0 && (
+            <span className="absolute left-[-14px] top-0 h-full w-px bg-slate-300" />
+          )}
+          <div
+            className={`flex items-center rounded-md transition-colors ${
+              isDisabled
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer hover:bg-slate-200/60"
+            } ${
+              selectedTarget === node._id ? "bg-indigo-100 font-semibold" : ""
+            }`}
+            style={{ paddingLeft: `${level * 20}px` }}
+          >
+            <div
+              className="flex h-7 w-7 items-center justify-center"
+              onClick={() => hasChildren && toggleFolder(node._id)}
+            >
+              {hasChildren ? (
+                <Icon
+                  name="chevronRight"
+                  className={`h-4 w-4 text-slate-500 transition-transform ${
+                    isExpanded ? "rotate-90" : ""
+                  }`}
+                />
+              ) : (
+                <span className="w-4" />
+              )}
+            </div>
+
+            <div
+              className="flex flex-grow items-center gap-2 py-1.5"
+              onClick={() => !isDisabled && onSelectTarget(node._id)}
+            >
+              <Icon name="folder" className="h-5 w-5 text-indigo-500" />
+              <span className="truncate">{node.name}</span>
+            </div>
+          </div>
+
+          {isExpanded && hasChildren && (
+            <div className="relative pl-5">
+              <span className="absolute left-[6px] top-0 h-full w-px bg-slate-300" />
+              {renderNodes(node.children, level + 1)}
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
+
+  return <>{renderNodes(nodes)}</>;
+};
 
 // --- APP COMPONENTS ---
 // ============================================================================
@@ -1948,7 +2035,7 @@ const DrivePage: FC<{
     if (view === "drive" && !isBin) {
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) {
-        uploadFiles(files, folderId);
+        uploadFiles(files, folderId || "root");
       }
     }
   };
@@ -2110,6 +2197,38 @@ const Modals: FC<{
     null
   );
 
+  const getDisabledIds = useMemo(() => {
+    if (modal.type !== "move" || !modal.data) return new Set<string>();
+
+    const items = Array.isArray(modal.data) ? modal.data : [modal.data];
+    const folderItems = items.filter((i) => i.type === "folder");
+    if (folderItems.length === 0) return new Set<string>();
+
+    const disabled = new Set<string>();
+    const queue: DriveItem[] = [...folderItems];
+
+    const allFolders = new Map<string, FolderTreeNode>();
+    const flattenTree = (nodes: FolderTreeNode[]) => {
+      for (const node of nodes) {
+        allFolders.set(node._id, node);
+        if (node.children) flattenTree(node.children);
+      }
+    };
+    flattenTree(folderTree);
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) continue;
+
+      disabled.add(current._id);
+      const treeNode = allFolders.get(current._id);
+      if (treeNode && treeNode.children) {
+        queue.push(...treeNode.children);
+      }
+    }
+    return disabled;
+  }, [modal.type, modal.data, folderTree]);
+
   useEffect(() => {
     if (modal.type === "move" && modal.data) {
       const fetchTree = async () => {
@@ -2190,29 +2309,6 @@ const Modals: FC<{
     onClose(true);
   };
 
-  const renderFolderTree = (nodes: FolderTreeNode[], level = 0) => (
-    <>
-      {nodes.map((node) => (
-        <div key={node._id}>
-          <div
-            onClick={() => setSelectedMoveTarget(node._id)}
-            className={`px-2 py-1.5 rounded cursor-pointer flex items-center gap-2 ${
-              selectedMoveTarget === node._id
-                ? "bg-indigo-100"
-                : "hover:bg-slate-100"
-            }`}
-            style={{ marginLeft: `${level * 20}px` }}
-          >
-            <Icon name="folder" className="h-5 w-5 text-slate-600" />{" "}
-            {node.name}
-          </div>
-          {node.children?.length > 0 &&
-            renderFolderTree(node.children, level + 1)}
-        </div>
-      ))}
-    </>
-  );
-
   const modalDataAsArray = useMemo(() => {
     if (!modal.data) return [];
     return Array.isArray(modal.data) ? modal.data : [modal.data];
@@ -2279,16 +2375,19 @@ const Modals: FC<{
           <div className="max-h-64 overflow-y-auto border rounded-md p-2 bg-slate-50/50">
             <div
               onClick={() => setSelectedMoveTarget(null)}
-              className={`px-2 py-1.5 rounded cursor-pointer flex items-center gap-2 ${
-                selectedMoveTarget === null
-                  ? "bg-indigo-100"
-                  : "hover:bg-slate-100"
+              className={`flex cursor-pointer items-center gap-2 rounded-md py-1.5 pl-2 pr-2 transition-colors hover:bg-slate-200/60 ${
+                selectedMoveTarget === null ? "bg-indigo-100 font-semibold" : ""
               }`}
             >
-              <Icon name="folder" className="h-5 w-5 text-slate-600" />
+              <Icon name="folder" className="h-5 w-5 text-indigo-500" />
               My Drive (root)
             </div>
-            {renderFolderTree(folderTree)}
+            <FolderTreeView
+              nodes={folderTree}
+              selectedTarget={selectedMoveTarget}
+              onSelectTarget={setSelectedMoveTarget}
+              disabledIds={getDisabledIds}
+            />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onClose()}>
@@ -2331,11 +2430,39 @@ const UploadModal: FC<{
   uploadFiles: (files: File[], folderId: string | null) => void;
 }> = ({ isOpen, onClose, currentFolderId, uploadFiles }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
+  const [selectedUploadTarget, setSelectedUploadTarget] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const initialTarget = currentFolderId === "root" ? null : currentFolderId;
+      setSelectedUploadTarget(initialTarget);
+
+      const fetchTree = async () => {
+        try {
+          const res = await api.getFolderTree();
+          if (res?.ok) {
+            setFolderTree(await res.json());
+          } else {
+            throw new Error("Failed to fetch folder tree");
+          }
+        } catch (error) {
+          console.error(error);
+          toast.error("Could not load folder structure for upload selection.");
+        }
+      };
+      fetchTree();
+    }
+  }, [isOpen, currentFolderId]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    uploadFiles(files, currentFolderId === "root" ? null : currentFolderId);
-    onClose(true);
+    if (files.length > 0) {
+      uploadFiles(files, selectedUploadTarget);
+      onClose(true);
+    }
   };
 
   return (
@@ -2344,10 +2471,27 @@ const UploadModal: FC<{
         <DialogHeader>
           <DialogTitle>Upload Files</DialogTitle>
         </DialogHeader>
-        <p>
-          Select the files you want to upload. They will be added to the current
-          folder.
+        <p className="text-sm text-muted-foreground">
+          Select a destination folder for your upload. The current folder is
+          selected by default.
         </p>
+        <div className="my-4 max-h-64 overflow-y-auto rounded-md border bg-slate-50/50 p-2">
+          <div
+            onClick={() => setSelectedUploadTarget(null)}
+            className={`flex cursor-pointer items-center gap-2 rounded-md py-1.5 pl-2 pr-2 transition-colors hover:bg-slate-200/60 ${
+              selectedUploadTarget === null ? "bg-indigo-100 font-semibold" : ""
+            }`}
+          >
+            <Icon name="folder" className="h-5 w-5 text-indigo-500" />
+            My Drive (root)
+          </div>
+
+          <FolderTreeView
+            nodes={folderTree}
+            selectedTarget={selectedUploadTarget}
+            onSelectTarget={setSelectedUploadTarget}
+          />
+        </div>
         <input
           type="file"
           multiple
@@ -2360,7 +2504,7 @@ const UploadModal: FC<{
             Cancel
           </Button>
           <Button onClick={() => fileInputRef.current?.click()}>
-            Select Files
+            Select Files to Upload
           </Button>
         </DialogFooter>
       </DialogContent>
