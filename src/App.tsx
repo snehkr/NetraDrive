@@ -2512,6 +2512,33 @@ const UploadModal: FC<{
   );
 };
 
+// --- LOGOUT CONFIRMATION MODAL ---
+// ====================================
+const LogoutConfirmationModal: FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}> = ({ isOpen, onClose, onConfirm }) => {
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirm Logout</DialogTitle>
+        </DialogHeader>
+        <p>Are you sure you want to log out of NetraDrive?</p>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            Logout
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 // --- MAIN APP ---
 // ============================================================================
 const getPathFromHash = (): AppPath => {
@@ -2539,6 +2566,7 @@ export default function App() {
   const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   const {
     uploads,
@@ -2594,6 +2622,7 @@ export default function App() {
   const handleLogout = () => {
     api.clearTokens();
     setIsAuthenticated(false);
+    setIsLogoutModalOpen(false);
   };
 
   if (!isAuthenticated)
@@ -2619,7 +2648,7 @@ export default function App() {
             setMobileSidebarOpen(false);
           }}
           storageUsage={storageUsage}
-          onLogout={handleLogout}
+          onLogout={() => setIsLogoutModalOpen(true)}
         />
       </SheetContent>
     </Sheet>
@@ -2628,12 +2657,17 @@ export default function App() {
   return (
     <div className="h-screen w-screen flex bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 font-sans text-slate-900 overflow-hidden smooth-transition">
       <Toaster richColors position="top-center" />
+      <LogoutConfirmationModal
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        onConfirm={handleLogout}
+      />
       <div className="hidden md:block w-64 flex-shrink-0">
         <Sidebar
           currentView={path.view}
           onNavigate={handleNavigate}
           storageUsage={storageUsage}
-          onLogout={handleLogout}
+          onLogout={() => setIsLogoutModalOpen(true)}
         />
       </div>
 
