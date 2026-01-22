@@ -1178,26 +1178,30 @@ const DrivePage: FC<{
         }
         try {
           if (targetItems[0].type !== "file") return;
-          const toastId = toast.loading("Preparing download...");
 
-          // Generate a direct link instead of downloading to Blob
-          const res = await api.generateShareLink(targetItems[0]._id);
-          if (!res.ok) throw new Error("Could not generate download link");
+          // Improved download logic to use Blob and Auth headers
+          const toastId = toast.loading("Downloading...");
 
-          const linkData = await res.json();
-          const downloadUrl = `${API_ROOT}/s/${linkData._id}`;
+          const res = await api.downloadFile(targetItems[0]._id);
+          if (!res.ok) throw new Error("Download failed");
 
-          // Create a temporary link element to force download
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+
           const link = document.createElement("a");
-          link.href = downloadUrl;
-          link.setAttribute("download", targetItems[0].name);
+          link.href = url;
+          link.download = targetItems[0].name;
           document.body.appendChild(link);
           link.click();
+
+          // Cleanup
           document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
 
           toast.dismiss(toastId);
-          toast.success("Download started.");
+          toast.success("Download complete.");
         } catch (e) {
+          toast.dismiss(); // Ensure loading toast is dismissed on error
           toast.error(`Download failed: ${(e as Error).message}`);
         }
         break;

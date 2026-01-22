@@ -161,7 +161,7 @@ export const api = {
   permanentlyDeleteFile: (fileId: string): Promise<Response> =>
     api.request(`/files/${fileId}`, { method: "DELETE" }),
   search: (query: string): Promise<Response> =>
-    api.request(`/files/search/?q=${query}`),
+    api.request(`/files/search/?q=${encodeURIComponent(query)}`),
   getPreviewBlob: async (fileId: string): Promise<Blob | null> => {
     try {
       const res = await api.request(`/files/${fileId}/preview`, {
