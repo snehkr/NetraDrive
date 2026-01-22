@@ -25,10 +25,26 @@ export const ResetPasswordPage: FC<ResetPasswordPageProps> = ({
       return;
     }
 
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
+    // Extract token from hash or search
+    const getToken = () => {
+      // 1. Try standard query params (?token=...)
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.get("token")) return searchParams.get("token");
+
+      // 2. Try hash query params (#/route?token=...)
+      const hash = window.location.hash;
+      const qIndex = hash.indexOf("?");
+      if (qIndex !== -1) {
+        const hashParams = new URLSearchParams(hash.substring(qIndex));
+        return hashParams.get("token");
+      }
+      return null;
+    };
+
+    const token = getToken();
+
     if (!token) {
-      toast.error("Invalid reset link.");
+      toast.error("Invalid reset link (missing token).");
       return;
     }
 

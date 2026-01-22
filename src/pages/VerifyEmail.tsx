@@ -17,9 +17,23 @@ export const VerifyEmailPage: FC<VerifyEmailPageProps> = ({ onContinue }) => {
 
   useEffect(() => {
     const verify = async () => {
-      // Parse token from URL query params (e.g. ?token=xyz)
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get("token");
+      // Extract token from hash or search
+      const getToken = () => {
+        // 1. Try standard query params (?token=...)
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get("token")) return searchParams.get("token");
+
+        // 2. Try hash query params (#/route?token=...)
+        const hash = window.location.hash;
+        const qIndex = hash.indexOf("?");
+        if (qIndex !== -1) {
+          const hashParams = new URLSearchParams(hash.substring(qIndex));
+          return hashParams.get("token");
+        }
+        return null;
+      };
+
+      const token = getToken();
 
       if (!token) {
         setStatus("error");
