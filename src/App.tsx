@@ -21,6 +21,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+
+// Other UI Imports
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Toaster, toast } from "sonner";
@@ -31,593 +33,35 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
+
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { api, API_ROOT } from "./lib/api";
+import { LoginPage } from "./pages/Login";
+import { ForgotPasswordPage } from "./pages/ForgotPassword";
+import { VerifyEmailPage } from "./pages/VerifyEmail";
+import { ResetPasswordPage } from "./pages/ResetPassword";
+import { Icon } from "@/components/Icon";
+import { formatBytes, formatDate, getFileIconName } from "@/lib/utils";
 
-// --- TYPE DEFINITIONS ---
-// ============================================================================
-
-type IconName =
-  | "folder"
-  | "file"
-  | "upload"
-  | "search"
-  | "user"
-  | "logout"
-  | "star"
-  | "trash"
-  | "more"
-  | "chevronRight"
-  | "x"
-  | "spinner"
-  | "cloud"
-  | "plus"
-  | "move"
-  | "edit"
-  | "download"
-  | "restore"
-  | "eye"
-  | "menu"
-  | "checkCircle"
-  | "alertCircle"
-  | "arrowUpDown"
-  | "chevronUp"
-  | "chevronDown"
-  | "activity"
-  | "image"
-  | "video"
-  | "pdf"
-  | "archive"
-  | "code"
-  | "layoutGrid"
-  | "layoutList";
-
-interface Folder {
-  _id: string;
-  id: string;
-  name: string;
-  parent_id: string | null;
-  size?: number;
-  owner_id: string;
-  created_at: string;
-  is_deleted: boolean;
-  is_starred: boolean;
-  deleted_at: string | null;
-  type: "folder";
-}
-interface FileItem {
-  _id: string;
-  id: string;
-  name: string;
-  mime_type: string;
-  size: number;
-  folder_id: string | null;
-  owner_id: string;
-  created_at: string;
-  is_deleted: boolean;
-  is_starred: boolean;
-  deleted_at: string | null;
-  type: "file";
-}
-type DriveItem = Folder | FileItem;
-interface FolderTreeNode extends Folder {
-  children: FolderTreeNode[];
-}
-interface StorageUsage {
-  total_usage_bytes: number;
-}
-interface Breadcrumb {
-  id: string;
-  name: string;
-}
-interface ModalState {
-  type: string | null;
-  data: DriveItem | DriveItem[] | null;
-}
-type ViewType = "drive" | "starred" | "bin" | "search" | "progress";
-type ViewMode = "list" | "grid";
-interface AppPath {
-  view: ViewType;
-  folderId: string | null;
-  searchQuery?: string;
-}
-type SortKey = "name" | "size" | "created_at";
-type SortDirection = "asc" | "desc";
-interface UploadItem {
-  id: number;
-  file: File;
-  progress: number;
-  status: "queued" | "uploading" | "complete" | "error" | "cancelled";
-  folderId: string | null;
-  xhr?: XMLHttpRequest;
-}
-interface Task {
-  task_id: string;
-  file_name: string;
-  status: string;
-  type: string;
-  progress_percent: number;
-  transferred: number;
-  transferred_hr: string;
-  total: number;
-  total_hr: string;
-  speed_bytes_per_sec: number;
-  eta_seconds: number | null;
-  eta_friendly: string;
-  can_cancel: boolean;
-}
-interface JwtPayload {
-  sub: string;
-  exp: number;
-}
-
-// --- ICONS ---
-// ============================================================================
-const Icon: FC<{ name: IconName; className?: string }> = ({
-  name,
-  className = "h-6 w-6",
-}) => {
-  const icons: Record<IconName, ReactNode> = {
-    folder: (
-      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-    ),
-    file: (
-      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-    ),
-    upload: (
-      <>
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-        <polyline points="17 8 12 3 7 8" />
-        <line x1="12" x2="12" y1="3" y2="15" />
-      </>
-    ),
-    search: (
-      <>
-        <circle cx="11" cy="11" r="8" />
-        <path d="m21 21-4.3-4.3" />
-      </>
-    ),
-    user: (
-      <>
-        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </>
-    ),
-    logout: (
-      <>
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-        <polyline points="16 17 21 12 16 7" />
-        <line x1="21" x2="9" y1="12" y2="12" />
-      </>
-    ),
-    star: (
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    ),
-    trash: (
-      <>
-        <path d="M3 6h18" />
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        <line x1="10" x2="10" y1="11" y2="17" />
-        <line x1="14" x2="14" y1="11" y2="17" />
-      </>
-    ),
-    more: (
-      <>
-        <circle cx="12" cy="12" r="1" />
-        <circle cx="19" cy="12" r="1" />
-        <circle cx="5" cy="12" r="1" />
-      </>
-    ),
-    chevronRight: <path d="m9 18 6-6-6-6" />,
-    x: (
-      <>
-        <path d="M18 6 6 18" />
-        <path d="m6 6 12 12" />
-      </>
-    ),
-    spinner: <path d="M21 12a9 9 0 1 1-6.219-8.56" />,
-    cloud: <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />,
-    plus: (
-      <>
-        <path d="M5 12h14" />
-        <path d="M12 5v14" />
-      </>
-    ),
-    move: (
-      <>
-        <polyline points="5 9 2 9 2 5" />
-        <polyline points="9 5 9 2 5 2" />
-        <polyline points="15 5 15 2 19 2" />
-        <polyline points="19 9 22 9 22 5" />
-        <polyline points="5 15 2 15 2 19" />
-        <polyline points="9 19 9 22 5 22" />
-        <polyline points="15 19 15 22 19 22" />
-        <polyline points="19 15 22 15 22 19" />
-      </>
-    ),
-    edit: <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />,
-    download: (
-      <>
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-        <polyline points="7 10 12 15 17 10" />
-        <line x1="12" x2="12" y1="15" y2="3" />
-      </>
-    ),
-    restore: (
-      <>
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" />
-        <path d="m12 18-3-3h6l-3 3" />
-        <path d="M12 15V9" />
-      </>
-    ),
-    eye: (
-      <>
-        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-        <circle cx="12" cy="12" r="3" />
-      </>
-    ),
-    menu: (
-      <>
-        <line x1="4" x2="20" y1="12" y2="12" />
-        <line x1="4" x2="20" y1="6" y2="6" />
-        <line x1="4" x2="20" y1="18" y2="18" />
-      </>
-    ),
-    checkCircle: (
-      <>
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-        <polyline points="22 4 12 14.01 9 11.01" />
-      </>
-    ),
-    alertCircle: (
-      <>
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" x2="12" y1="8" y2="12" />
-        <line x1="12" x2="12.01" y1="16" y2="16" />
-      </>
-    ),
-    arrowUpDown: <path d="m21 16-4 4-4-4" />,
-    chevronUp: <path d="m18 15-6-6-6 6" />,
-    chevronDown: <path d="m6 9 6 6 6-6" />,
-    activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />,
-    image: (
-      <>
-        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-        <circle cx="9" cy="9" r="2" />
-        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-      </>
-    ),
-    video: (
-      <>
-        <path d="m22 8-6 4 6 4V8Z" />
-        <rect width="14" height="12" x="2" y="6" rx="2" ry="2" />
-      </>
-    ),
-    pdf: (
-      <>
-        <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-        <path d="M14.5 22H18a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4" />
-        <path d="M5 12h3" />
-        <path d="M5 15h3" />
-        <path d="M5 18h3" />
-        <path d="M4 22V10a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v12" />
-      </>
-    ),
-    archive: (
-      <>
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z" />
-        <path d="M10 14h4" />
-      </>
-    ),
-    code: (
-      <>
-        <polyline points="16 18 22 12 16 6" />
-        <polyline points="8 6 2 12 8 18" />
-      </>
-    ),
-    layoutGrid: (
-      <>
-        <rect width="18" height="18" x="3" y="3" rx="2" />
-        <rect width="7" height="7" x="3" y="3" rx="0" />
-        <rect width="7" height="7" x="14" y="3" rx="0" />
-        <rect width="7" height="7" x="14" y="14" rx="0" />
-        <rect width="7" height="7" x="3" y="14" rx="0" />
-      </>
-    ),
-    layoutList: (
-      <>
-        <line x1="8" x2="21" y1="6" y2="6" />
-        <line x1="8" x2="21" y1="12" y2="12" />
-        <line x1="8" x2="21" y1="18" y2="18" />
-        <line x1="3" x2="3.01" y1="6" y2="6" />
-        <line x1="3" x2="3.01" y1="12" y2="12" />
-        <line x1="3" x2="3.01" y1="18" y2="18" />
-      </>
-    ),
-  };
-
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={name === "spinner" ? `${className} animate-spin` : className}
-    >
-      {icons[name]}
-    </svg>
-  );
-};
-
-// --- API HELPER ---
-// ============================================================================
-
-const API_BASE_URL = import.meta.env.VITE_NETRA_DRIVE_API_BASE_URL;
-
-let refreshTokenPromise: Promise<boolean> | null = null;
-
-const api = {
-  getTokens: (): { access: string | null; refresh: string | null } => {
-    return {
-      access: localStorage.getItem("accessToken"),
-      refresh: localStorage.getItem("refreshToken"),
-    };
-  },
-  setTokens: (access: string, refresh: string): void => {
-    localStorage.setItem("accessToken", access);
-    localStorage.setItem("refreshToken", refresh);
-  },
-  clearTokens: (): void => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-  },
-
-  request: async function (
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<Response> {
-    const makeRequest = async () => {
-      const { access } = this.getTokens();
-      const headers = new Headers(options.headers);
-      if (!headers.has("Accept")) {
-        headers.set("Accept", "application/json");
-      }
-      if (access) {
-        headers.set("Authorization", `Bearer ${access}`);
-      }
-      return fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
-    };
-
-    let response = await makeRequest();
-
-    if (response.status === 401 && this.getTokens().refresh) {
-      if (!refreshTokenPromise) {
-        refreshTokenPromise = this.refreshToken().finally(() => {
-          refreshTokenPromise = null;
-        });
-      }
-
-      const refreshSuccess = await refreshTokenPromise;
-
-      if (refreshSuccess) {
-        response = await makeRequest();
-      } else {
-        this.clearTokens();
-        window.location.reload();
-      }
-    }
-    return response;
-  },
-  refreshToken: async function (): Promise<boolean> {
-    const { refresh } = this.getTokens();
-    if (!refresh) return false;
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/refresh_token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refresh }),
-      });
-      if (!response.ok) throw new Error("Refresh failed");
-      const data = await response.json();
-      this.setTokens(data.access_token, data.refresh_token);
-      return true;
-    } catch (error) {
-      console.error("Token refresh failed:", error);
-      return false;
-    }
-  },
-  login: (username: string, password: string): Promise<Response> => {
-    const t = new URLSearchParams();
-    t.append("username", username);
-    t.append("password", password);
-    return fetch(`${API_BASE_URL}/auth/token`, {
-      method: "POST",
-      body: t,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    });
-  },
-  signup: (
-    username: string,
-    email: string,
-    password: string
-  ): Promise<Response> =>
-    api.request("/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, email, password }),
-    }),
-  getStorageUsage: (): Promise<Response> => api.request("/users/me/storage"),
-  getFolderPath: (folderId: string): Promise<Response> =>
-    api.request(`/folders/${folderId}/path`),
-  listFolders: (
-    parentId: string | null,
-    includeDeleted = false,
-    isStarred = false
-  ): Promise<Response> =>
-    api.request(
-      `/folders/?parent_id=${
-        parentId || "root"
-      }&include_deleted=${includeDeleted}&is_starred=${isStarred}`
-    ),
-  createFolder: (name: string, parent_id: string | null): Promise<Response> =>
-    api.request("/folders/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, parent_id }),
-    }),
-  getFolderTree: (): Promise<Response> => api.request("/folders/tree"),
-  moveFolderToBin: (folderId: string): Promise<Response> =>
-    api.request(`/folders/${folderId}/bin`, { method: "PUT" }),
-  restoreFolder: (folderId: string): Promise<Response> =>
-    api.request(`/folders/${folderId}/restore`, { method: "PUT" }),
-  permanentlyDeleteFolder: (folderId: string): Promise<Response> =>
-    api.request(`/folders/${folderId}`, { method: "DELETE" }),
-  listFiles: (
-    folderId: string | null,
-    includeDeleted = false,
-    isStarred = false
-  ): Promise<Response> =>
-    api.request(
-      `/files/?folder_id=${
-        folderId || "root"
-      }&include_deleted=${includeDeleted}&is_starred=${isStarred}`
-    ),
-  downloadFile: (fileId: string): Promise<Response> =>
-    api.request(`/files/${fileId}/download`),
-  moveFileToBin: (fileId: string): Promise<Response> =>
-    api.request(`/files/${fileId}/bin`, { method: "PUT" }),
-  restoreFile: (fileId: string): Promise<Response> =>
-    api.request(`/files/${fileId}/restore`, { method: "PUT" }),
-  permanentlyDeleteFile: (fileId: string): Promise<Response> =>
-    api.request(`/files/${fileId}`, { method: "DELETE" }),
-  search: (query: string): Promise<Response> =>
-    api.request(`/files/search/?q=${query}`),
-  getPreviewBlob: async (fileId: string): Promise<Blob | null> => {
-    try {
-      const res = await api.request(`/files/${fileId}/preview`, {
-        headers: { Accept: "*/*" },
-      });
-      if (!res.ok) throw new Error("Failed to fetch preview");
-      return await res.blob();
-    } catch (error) {
-      console.error("Preview fetch error:", error);
-      return null;
-    }
-  },
-  uploadFile: (
-    file: File,
-    folderId: string | null,
-    onProgress: (p: number) => void
-  ): { xhr: XMLHttpRequest; promise: Promise<Response> } => {
-    const xhr = new XMLHttpRequest();
-    const promise = new Promise<Response>((resolve, reject) => {
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          onProgress((e.loaded / e.total) * 100);
-        }
-      });
-      xhr.addEventListener("load", () => {
-        const response = new Response(xhr.responseText, {
-          status: xhr.status,
-          statusText: xhr.statusText,
-          headers: { "Content-Type": "application/json" },
-        });
-        resolve(response);
-      });
-      xhr.addEventListener("error", () => reject(new Error("Upload failed.")));
-      xhr.addEventListener("abort", () =>
-        reject(new Error("Upload cancelled."))
-      );
-
-      // Build URL with folder_id as query parameter
-      let url = `${API_BASE_URL}/files/upload`;
-      if (folderId) {
-        url += `?folder_id=${folderId}`;
-      }
-
-      xhr.open("POST", url);
-      const { access } = api.getTokens();
-      if (access) xhr.setRequestHeader("Authorization", `Bearer ${access}`);
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      xhr.send(formData);
-    });
-    return { xhr, promise };
-  },
-  renameItem: (
-    itemType: string,
-    itemId: string,
-    newName: string
-  ): Promise<Response> =>
-    api.request(`/${itemType}s/${itemId}/rename`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ new_name: newName }),
-    }),
-  moveItem: (
-    itemType: string,
-    itemId: string,
-    newParentId: string | null
-  ): Promise<Response> =>
-    api.request(`/${itemType}s/${itemId}/move`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ new_parent_id: newParentId }),
-    }),
-  starItem: (itemType: string, itemId: string): Promise<Response> =>
-    api.request(`/${itemType}s/${itemId}/star`, { method: "PUT" }),
-  unstarItem: (itemType: string, itemId: string): Promise<Response> =>
-    api.request(`/${itemType}s/${itemId}/unstar`, { method: "PUT" }),
-  getTasks: (userId: string): Promise<Response> =>
-    api.request(`/tasks/?user_id=${userId}`),
-  cancelTask: (taskId: string): Promise<Response> =>
-    api.request(`/tasks/cancel/${taskId}`, { method: "POST" }),
-};
-
-// --- UTILITIES & HOOKS ---
-// ============================================================================
-
-const formatBytes = (bytes: number, decimals = 2): string => {
-  if (!+bytes) return "0 Bytes";
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-};
-const formatDate = (dateString: string): string =>
-  new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: true,
-  });
-
-const getFileIconName = (item: FileItem): IconName => {
-  const mime = item.mime_type;
-  if (mime.startsWith("image/")) return "image";
-  if (mime.startsWith("video/")) return "video";
-  if (mime.startsWith("application/pdf")) return "pdf";
-  if (mime.startsWith("application/zip") || mime.includes("archive"))
-    return "archive";
-  if (
-    mime.startsWith("text/") ||
-    mime.includes("script") ||
-    mime.includes("json")
-  )
-    return "code";
-  return "file";
-};
+import type {
+  AppPath,
+  ViewType,
+  ViewMode,
+  SortKey,
+  SortDirection,
+  DriveItem,
+  Folder,
+  FileItem,
+  StorageUsage,
+  Breadcrumb,
+  ModalState,
+  Task,
+  JwtPayload,
+  IconName,
+  UploadItem,
+  FolderTreeNode,
+} from "@/types";
 
 const useUploader = (onUploadComplete: () => void) => {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
@@ -626,29 +70,10 @@ const useUploader = (onUploadComplete: () => void) => {
   const uploadFiles = (files: File[], folderId: string | null) => {
     const newUploads: UploadItem[] = [];
     const maxFileSize = 1 * 1024 * 1024 * 1024; // 1GB
-    const allowedTypes = [
-      "image/",
-      "video/",
-      "audio/",
-      "text/",
-      "application/pdf",
-      "application/zip",
-      "application/x-zip-compressed",
-      "application/json",
-      "application/javascript",
-    ];
 
     for (const file of files) {
       if (file.size > maxFileSize) {
         toast.error(`"${file.name}" is too large (max 1GB).`);
-        continue;
-      }
-
-      if (
-        !allowedTypes.some((type) => file.type.startsWith(type)) &&
-        file.type !== ""
-      ) {
-        toast.warning(`"${file.name}" has an unsupported file type.`);
         continue;
       }
 
@@ -738,6 +163,13 @@ const useUploader = (onUploadComplete: () => void) => {
   }, [uploads, onUploadComplete]);
 
   useEffect(() => {
+    const nextUpload = uploads.find((u) => u.status === "queued");
+    if (nextUpload) {
+      processQueue();
+    }
+  }, [uploads, processQueue]);
+
+  useEffect(() => {
     const finishedUploads = uploads.filter(
       (u) =>
         u.status === "complete" ||
@@ -754,10 +186,6 @@ const useUploader = (onUploadComplete: () => void) => {
     }
   }, [uploads]);
 
-  useEffect(() => {
-    processQueue();
-  }, [uploads, processQueue]);
-
   return {
     uploads,
     uploadFiles,
@@ -769,7 +197,6 @@ const useUploader = (onUploadComplete: () => void) => {
 };
 
 // --- UI COMPONENTS ---
-// ============================================================================
 
 const EmptyState: FC<{
   icon: IconName;
@@ -857,6 +284,15 @@ const FolderTreeView: FC<{
               selectedTarget === node._id ? "bg-indigo-100 font-semibold" : ""
             }`}
             style={{ paddingLeft: `${level * 20}px` }}
+            role="button"
+            tabIndex={isDisabled ? -1 : 0}
+            onKeyDown={(e) => {
+              if (!isDisabled && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                onSelectTarget(node._id);
+              }
+            }}
+            onClick={() => !isDisabled && onSelectTarget(node._id)}
           >
             <div
               className="flex h-7 w-7 items-center justify-center"
@@ -895,136 +331,6 @@ const FolderTreeView: FC<{
   };
 
   return <>{renderNodes(nodes)}</>;
-};
-
-// --- APP COMPONENTS ---
-// ============================================================================
-
-const AuthPage: FC<{ onLoginSuccess: () => void }> = ({ onLoginSuccess }) => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const usernameRef = useRef<HTMLInputElement>(null);
-  const emailRef = useRef<HTMLInputElement>(null);
-  const passwordRef = useRef<HTMLInputElement>(null);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    const username = usernameRef.current?.value;
-    const password = passwordRef.current?.value;
-
-    if (!username || !password) {
-      setError("Please fill in all fields.");
-      setLoading(false);
-      return;
-    }
-    try {
-      let response;
-      if (isLogin) {
-        response = await api.login(username, password);
-      } else {
-        const email = emailRef.current?.value;
-        if (!email) {
-          setError("Please provide an email.");
-          setLoading(false);
-          return;
-        }
-        response = await api.signup(username, email, password);
-      }
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "An error occurred.");
-
-      if (isLogin) {
-        api.setTokens(data.access_token, data.refresh_token);
-        onLoginSuccess();
-      } else {
-        toast.success("Signup successful! Please log in.");
-        setIsLogin(true);
-      }
-    } catch (err) {
-      if (err instanceof Error) setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md p-8 shadow-2xl glass-effect animate-scale-in">
-        <div className="flex justify-center mb-6">
-          <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 animate-pulse-slow shadow-lg">
-            <Icon name="cloud" className="h-12 w-12 text-white" />
-          </div>
-        </div>
-        <h1 className="text-2xl font-bold text-center mb-1 text-slate-800">
-          NetraDrive
-        </h1>
-        <p className="text-center text-slate-600 mb-8">
-          {isLogin ? "Welcome back! Please log in." : "Create your account."}
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-4">
-            <Input
-              ref={usernameRef}
-              placeholder="Username"
-              required
-              className="smooth-transition"
-            />
-            {!isLogin && (
-              <Input
-                ref={emailRef}
-                type="email"
-                placeholder="Email"
-                required
-                className="smooth-transition"
-              />
-            )}
-            <Input
-              ref={passwordRef}
-              type="password"
-              placeholder="Password"
-              required
-              className="smooth-transition"
-            />
-          </div>
-          {error && (
-            <p className="text-red-500 text-sm mt-4 animate-slide-down">
-              {error}
-            </p>
-          )}
-          <Button
-            type="submit"
-            className="w-full mt-6 hover-lift bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
-            disabled={loading}
-          >
-            {loading ? (
-              <Icon name="spinner" className="h-4 w-4" />
-            ) : isLogin ? (
-              "Login"
-            ) : (
-              "Sign Up"
-            )}
-          </Button>
-        </form>
-        <p className="mt-6 text-center text-sm text-slate-600">
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <Button
-            variant="link"
-            className="p-1 h-auto smooth-transition text-indigo-600 hover:text-indigo-700"
-            onClick={() => {
-              setIsLogin((p) => !p);
-              setError("");
-            }}
-          >
-            {isLogin ? "Sign up" : "Log in"}
-          </Button>
-        </p>
-      </Card>
-    </div>
-  );
 };
 
 const Sidebar: FC<{
@@ -1256,6 +562,11 @@ const FileGridView: FC<{
           <Icon name="download" className="h-4 w-4 mr-2" /> Download
         </ContextMenuItem>
       )}
+      {item.type === "file" && (
+        <ContextMenuItem onSelect={() => onAction("share", item)}>
+          <Icon name="share" className="h-4 w-4 mr-2" /> Share
+        </ContextMenuItem>
+      )}
       <ContextMenuItem onSelect={() => onAction("rename", item)}>
         <Icon name="edit" className="h-4 w-4 mr-2" /> Rename
       </ContextMenuItem>
@@ -1339,9 +650,7 @@ const FileGridView: FC<{
                   {item.name}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
-                  {item.type === "file"
-                    ? formatBytes((item as FileItem).size)
-                    : "—"}
+                  {formatBytes(item.size)}
                 </p>
               </CardContent>
             </Card>
@@ -1409,6 +718,11 @@ const FileListView: FC<{
       {item.type === "file" && (
         <ContextMenuItem onSelect={() => onAction("download", item)}>
           <Icon name="download" className="h-4 w-4 mr-2" /> Download
+        </ContextMenuItem>
+      )}
+      {item.type === "file" && (
+        <ContextMenuItem onSelect={() => onAction("share", item)}>
+          <Icon name="share" className="h-4 w-4 mr-2" /> Share
         </ContextMenuItem>
       )}
       <ContextMenuItem onSelect={() => onAction("rename", item)}>
@@ -1501,9 +815,7 @@ const FileListView: FC<{
                       <span className="truncate">{item.name}</span>
                     </td>
                     <td className="p-4 text-muted-foreground">
-                      {item.type === "file"
-                        ? formatBytes((item as FileItem).size)
-                        : "—"}
+                      {formatBytes(item.size)}
                     </td>
                     <td className="p-4 text-muted-foreground">
                       {formatDate(item.created_at)}
@@ -1565,7 +877,6 @@ const ProgressPage: FC<{ children: ReactNode }> = ({ children }) => {
   const { access } = api.getTokens();
   const [user, setUser] = useState<JwtPayload | null>(null);
   const isInitialLoad = useRef(true);
-  const pollingRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (access) {
@@ -1601,20 +912,22 @@ const ProgressPage: FC<{ children: ReactNode }> = ({ children }) => {
     isInitialLoad.current = true;
     setLoading(true);
 
+    // Use a local variable to track if the component is still mounted
+    let mounted = true;
+    let timeoutId: number;
+
     const pollTasks = async () => {
       await fetchTasks();
-      if (pollingRef.current !== null) {
-        pollingRef.current = window.setTimeout(pollTasks, 2000);
+      if (mounted) {
+        timeoutId = window.setTimeout(pollTasks, 2000);
       }
     };
 
     pollTasks();
 
     return () => {
-      if (pollingRef.current !== null) {
-        clearTimeout(pollingRef.current);
-        pollingRef.current = null;
-      }
+      mounted = false;
+      window.clearTimeout(timeoutId);
     };
   }, [user?.sub, fetchTasks]);
 
@@ -1865,17 +1178,24 @@ const DrivePage: FC<{
         }
         try {
           if (targetItems[0].type !== "file") return;
-          const res = await api.downloadFile(targetItems[0]._id);
-          if (!res.ok) throw new Error("Download failed");
-          const blob = await res.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = targetItems[0].name;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
+          const toastId = toast.loading("Preparing download...");
+
+          // Generate a direct link instead of downloading to Blob
+          const res = await api.generateShareLink(targetItems[0]._id);
+          if (!res.ok) throw new Error("Could not generate download link");
+
+          const linkData = await res.json();
+          const downloadUrl = `${API_ROOT}/s/${linkData._id}`;
+
+          // Create a temporary link element to force download
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          link.setAttribute("download", targetItems[0].name);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          toast.dismiss(toastId);
           toast.success("Download started.");
         } catch (e) {
           toast.error(`Download failed: ${(e as Error).message}`);
@@ -1883,31 +1203,14 @@ const DrivePage: FC<{
         break;
       case "preview": {
         if (targetItems[0].type !== "file") return;
-        try {
-          const blob = await api.getPreviewBlob(targetItems[0]._id);
-          if (blob) {
-            const url = URL.createObjectURL(blob);
-            const previewWindow = window.open(url, "_blank");
-            if (previewWindow) {
-              previewWindow.addEventListener("beforeunload", () => {
-                URL.revokeObjectURL(url);
-              });
-              previewWindow.addEventListener("unload", () => {
-                URL.revokeObjectURL(url);
-              });
-            } else {
-              // Fallback cleanup if popup was blocked
-              setTimeout(() => URL.revokeObjectURL(url), 10000);
-            }
-          } else {
-            toast.error("Could not load preview.");
-          }
-        } catch (error) {
-          console.error("Preview error:", error);
-          toast.error("Failed to load preview.");
-        }
+
+        // Open the specialized Preview Modal (logic moved to Modals component)
+        setModal({ type: "preview", data: targetItems[0] });
         break;
       }
+      case "share":
+        setModal({ type: "share", data: targetItems[0] });
+        break;
       case "star":
       case "unstar":
         await Promise.all(
@@ -2196,6 +1499,8 @@ const Modals: FC<{
   const [selectedMoveTarget, setSelectedMoveTarget] = useState<string | null>(
     null
   );
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const getDisabledIds = useMemo(() => {
     if (modal.type !== "move" || !modal.data) return new Set<string>();
@@ -2229,6 +1534,13 @@ const Modals: FC<{
     return disabled;
   }, [modal.type, modal.data, folderTree]);
 
+  const copyToClipboard = () => {
+    if (shareLink) {
+      navigator.clipboard.writeText(shareLink);
+      toast.success("Link copied!");
+    }
+  };
+
   useEffect(() => {
     if (modal.type === "move" && modal.data) {
       const fetchTree = async () => {
@@ -2248,6 +1560,25 @@ const Modals: FC<{
             : (firstItem as FileItem).folder_id
         );
       }
+    }
+
+    // Fetch streaming link for Share/Preview
+    if (modal.type === "share" || modal.type === "preview") {
+      const item = modal.data as FileItem;
+      if (item && item.type === "file") {
+        api
+          .generateShareLink(item._id)
+          .then((res) => res.json())
+          .then((data) => {
+            const url = `${API_ROOT}/s/${data._id}`;
+            setShareLink(url);
+            if (modal.type === "preview") setPreviewUrl(url);
+          })
+          .catch(() => toast.error("Failed to generate link."));
+      }
+    } else {
+      setShareLink(null);
+      setPreviewUrl(null);
     }
   }, [modal.type, modal.data]);
 
@@ -2417,6 +1748,71 @@ const Modals: FC<{
               Delete
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 3. ADD SHARE MODAL */}
+      <Dialog open={modal.type === "share"} onOpenChange={() => onClose()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share File</DialogTitle>
+          </DialogHeader>
+          <div className="flex gap-2 mt-4">
+            <Input value={shareLink || "Generating..."} readOnly />
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={copyToClipboard}
+              disabled={!shareLink}
+            >
+              <Icon name="copy" className="h-4 w-4" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 4. ADD PREVIEW MODAL (With Video Support) */}
+      <Dialog open={modal.type === "preview"} onOpenChange={() => onClose()}>
+        <DialogContent className="max-w-4xl w-full h-[80vh] p-0 bg-black border-none flex flex-col">
+          <div className="flex justify-between items-center p-2 bg-slate-900 text-white">
+            <span className="truncate pl-2">
+              {(modal.data as DriveItem)?.name}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white"
+              onClick={() => onClose()}
+            >
+              <Icon name="x" className="h-5 w-5" />
+            </Button>
+          </div>
+          <div className="flex-grow flex items-center justify-center bg-black overflow-hidden">
+            {!previewUrl ? (
+              <Icon
+                name="spinner"
+                className="h-10 w-10 text-white animate-spin"
+              />
+            ) : (modal.data as FileItem)?.mime_type.startsWith("video/") ? (
+              <video
+                controls
+                autoPlay
+                className="max-h-full max-w-full"
+                src={previewUrl}
+              />
+            ) : (modal.data as FileItem)?.mime_type.startsWith("image/") ? (
+              <img
+                src={previewUrl}
+                alt="Preview"
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <iframe
+                src={previewUrl}
+                className="w-full h-full border-none bg-white"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
@@ -2611,27 +2007,62 @@ export default function App() {
     }
   }, []);
 
+  // Basic URL Routing for Auth Pages
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
   useEffect(() => {
     if (isAuthenticated) fetchStorage();
   }, [isAuthenticated, fetchStorage, refreshKey]);
 
-  const handleLoginSuccess = () => {
-    setIsAuthenticated(true);
-    handleNavigate("drive");
-  };
+  useEffect(() => {
+    const handlePathChange = () => setCurrentPath(window.location.pathname);
+    window.addEventListener("popstate", handlePathChange);
+    return () => window.removeEventListener("popstate", handlePathChange);
+  }, []);
+
   const handleLogout = () => {
     api.clearTokens();
     setIsAuthenticated(false);
     setIsLogoutModalOpen(false);
   };
 
-  if (!isAuthenticated)
+  const navigateTo = (path: string) => {
+    window.history.pushState({}, "", path);
+    setCurrentPath(path);
+  };
+
+  // --- ROUTING LOGIC ---
+
+  // Verify Email Route
+  if (currentPath === "/verify-email") {
+    return <VerifyEmailPage onContinue={() => navigateTo("/")} />;
+  }
+
+  // Forgot Password Route
+  if (currentPath === "/forgot-password") {
+    return <ForgotPasswordPage onBack={() => navigateTo("/")} />;
+  }
+
+  // Reset Password Route
+  if (currentPath === "/reset-password") {
+    return <ResetPasswordPage onSuccess={() => navigateTo("/")} />;
+  }
+
+  // Login / Main App
+  if (!isAuthenticated) {
     return (
       <>
         <Toaster richColors position="top-center" />
-        <AuthPage onLoginSuccess={handleLoginSuccess} />
+        <LoginPage
+          onLoginSuccess={() => {
+            setIsAuthenticated(true);
+            navigateTo("/");
+          }}
+          onNavigateForgot={() => navigateTo("/forgot-password")}
+        />
       </>
     );
+  }
 
   const mobileSidebarTrigger = (
     <Sheet open={isMobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
