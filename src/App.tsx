@@ -1939,6 +1939,16 @@ const LogoutConfirmationModal: FC<{
 // ============================================================================
 const getPathFromHash = (): AppPath => {
   const hash = window.location.hash.replace(/^#\/?/, "");
+
+  // Ignore auth routes
+  if (
+    hash.startsWith("forgot-password") ||
+    hash.startsWith("verify-email") ||
+    hash.startsWith("reset-password")
+  ) {
+    return { view: "drive", folderId: null };
+  }
+
   const [view, ...rest] = hash.split("/");
   const folderId = rest.join("/") || null;
 
@@ -1946,6 +1956,14 @@ const getPathFromHash = (): AppPath => {
     view: (view as ViewType) || "drive",
     folderId: folderId,
   };
+
+  if (view === "search") {
+    return {
+      view: "search",
+      folderId: null,
+      searchQuery: decodeURIComponent(rest.join("/") || ""),
+    };
+  }
 
   if (
     !["drive", "starred", "bin", "search", "progress"].includes(newPath.view)
@@ -1984,7 +2002,11 @@ export default function App() {
   };
 
   const handleSearch = (query: string) => {
-    setPath({ view: "search", folderId: null, searchQuery: query });
+    if (!query) {
+      window.location.hash = "#/drive";
+    } else {
+      window.location.hash = `#/search/${encodeURIComponent(query)}`;
+    }
   };
 
   useEffect(() => {
@@ -2007,18 +2029,17 @@ export default function App() {
     }
   }, []);
 
-  // Basic URL Routing for Auth Pages
-  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const authRoute = (() => {
+    const hash = window.location.hash.replace(/^#\/?/, "");
+    if (hash.startsWith("forgot-password")) return "forgot-password";
+    if (hash.startsWith("verify-email")) return "verify-email";
+    if (hash.startsWith("reset-password")) return "reset-password";
+    return null;
+  })();
 
   useEffect(() => {
-    if (isAuthenticated) fetchStorage();
-  }, [isAuthenticated, fetchStorage, refreshKey]);
-
-  useEffect(() => {
-    const handlePathChange = () => setCurrentPath(window.location.pathname);
-    window.addEventListener("popstate", handlePathChange);
-    return () => window.removeEventListener("popstate", handlePathChange);
-  }, []);
+    if (isAuthenticated && !authRoute) fetchStorage();
+  }, [isAuthenticated, authRoute, fetchStorage, refreshKey]);
 
   const handleLogout = () => {
     api.clearTokens();
@@ -2026,26 +2047,23 @@ export default function App() {
     setIsLogoutModalOpen(false);
   };
 
-  const navigateTo = (path: string) => {
-    window.history.pushState({}, "", path);
-    setCurrentPath(path);
-  };
-
   // --- ROUTING LOGIC ---
 
-  // Verify Email Route
-  if (currentPath === "/verify-email") {
-    return <VerifyEmailPage onContinue={() => navigateTo("/")} />;
+  // Forgot Password Route
+  if (authRoute === "forgot-password") {
+    return <ForgotPasswordPage onBack={() => (window.location.hash = "#/")} />;
   }
 
-  // Forgot Password Route
-  if (currentPath === "/forgot-password") {
-    return <ForgotPasswordPage onBack={() => navigateTo("/")} />;
+  // Verify Email Route
+  if (authRoute === "verify-email") {
+    return <VerifyEmailPage onContinue={() => (window.location.hash = "#/")} />;
   }
 
   // Reset Password Route
-  if (currentPath === "/reset-password") {
-    return <ResetPasswordPage onSuccess={() => navigateTo("/")} />;
+  if (authRoute === "reset-password") {
+    return (
+      <ResetPasswordPage onSuccess={() => (window.location.hash = "#/")} />
+    );
   }
 
   // Login / Main App
@@ -2056,9 +2074,11 @@ export default function App() {
         <LoginPage
           onLoginSuccess={() => {
             setIsAuthenticated(true);
-            navigateTo("/");
+            window.location.hash = "#/";
           }}
-          onNavigateForgot={() => navigateTo("/forgot-password")}
+          onNavigateForgot={() => {
+            window.location.hash = "#/forgot-password";
+          }}
         />
       </>
     );
